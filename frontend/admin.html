@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel · CLF-C02</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; margin: 0; padding: 0; }
+        body { background: #f2f5f9; padding: 24px; }
+        h1 { color: #0b2c4f; font-size: 1.6rem; margin-bottom: 6px; }
+        .subtitle { color: #58759c; font-size: 0.9rem; margin-bottom: 24px; }
+
+        .filters {
+            background: white;
+            border-radius: 16px;
+            padding: 20px 24px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .filter-group { display: flex; flex-direction: column; gap: 6px; }
+        .filter-group label { font-size: 0.78rem; font-weight: 600; color: #58759c; text-transform: uppercase; }
+        .filter-group input, .filter-group select {
+            padding: 8px 12px;
+            border: 1.5px solid #dae2ed;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            color: #0b2c4f;
+            outline: none;
+            min-width: 160px;
+        }
+        .filter-group input:focus, .filter-group select:focus { border-color: #2366d1; }
+        .btn {
+            padding: 9px 20px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .btn-primary { background: #0c2d5c; color: white; }
+        .btn-primary:hover { background: #0f3870; }
+        .btn-success { background: #1b6e38; color: white; }
+        .btn-success:hover { background: #155a2d; }
+        .btn-danger { background: #fff5f5; border: 1.5px solid #f5bdbd; color: #b12828; }
+
+        .stats-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 14px;
+            padding: 16px 24px;
+            flex: 1;
+            min-width: 140px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .stat-card .label { font-size: 0.78rem; color: #58759c; font-weight: 600; text-transform: uppercase; }
+        .stat-card .value { font-size: 2rem; font-weight: 700; color: #0b2c4f; margin-top: 4px; }
+        .stat-card.green .value { color: #1b6e38; }
+        .stat-card.red .value { color: #b12828; }
+
+        .table-wrap {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: #0c2d5c; color: white; }
+        thead th { padding: 12px 16px; text-align: left; font-size: 0.82rem; font-weight: 600; }
+        tbody tr { border-bottom: 1px solid #f0f4fa; }
+        tbody tr:hover { background: #f8fafd; }
+        tbody td { padding: 12px 16px; font-size: 0.88rem; color: #1f3b62; }
+        .badge {
+            padding: 3px 12px;
+            border-radius: 40px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .badge.pass { background: #e3f7e7; color: #1b6e38; }
+        .badge.fail { background: #ffe9e9; color: #b12828; }
+        .no-data { text-align: center; padding: 40px; color: #58759c; }
+    </style>
+</head>
+<body>
+
+<h1>☁️ CLF-C02 · Admin Panel</h1>
+<p class="subtitle">View and filter all exam results</p>
+
+<div class="stats-row">
+    <div class="stat-card"><div class="label">Total Appeared</div><div class="value" id="totalCount">—</div></div>
+    <div class="stat-card green"><div class="label">Passed</div><div class="value" id="passedCount">—</div></div>
+    <div class="stat-card red"><div class="label">Failed</div><div class="value" id="failedCount">—</div></div>
+    <div class="stat-card"><div class="label">Avg Score</div><div class="value" id="avgScore">—</div></div>
+</div>
+
+<div class="filters">
+    <div class="filter-group">
+        <label>Search Name</label>
+        <input type="text" id="filterName" placeholder="e.g. Raju" />
+    </div>
+    <div class="filter-group">
+        <label>Batch</label>
+        <input type="text" id="filterBatch" placeholder="e.g. wed-76" />
+    </div>
+    <div class="filter-group">
+        <label>Date</label>
+        <input type="date" id="filterDate" />
+    </div>
+    <div class="filter-group">
+        <label>Status</label>
+        <select id="filterPassed">
+            <option value="">All</option>
+            <option value="true">Passed</option>
+            <option value="false">Failed</option>
+        </select>
+    </div>
+    <div class="filter-group">
+        <label>&nbsp;</label>
+        <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="loadResults()">🔍 Search</button>
+            <button class="btn btn-danger" onclick="clearFilters()">✕ Clear</button>
+            <button class="btn btn-success" onclick="exportCSV()">⬇ CSV</button>
+        </div>
+    </div>
+</div>
+
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Batch</th>
+                <th>Score</th>
+                <th>Percentage</th>
+                <th>Status</th>
+                <th>Time Taken</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody id="resultsBody">
+            <tr><td colspan="8" class="no-data">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    const BACKEND = 'http://13.204.64.94:5000';
+    let allResults = [];
+
+    async function loadResults() {
+        const name   = document.getElementById('filterName').value;
+        const batch  = document.getElementById('filterBatch').value;
+        const date   = document.getElementById('filterDate').value;
+        const passed = document.getElementById('filterPassed').value;
+
+        let url = `${BACKEND}/results?`;
+        if (name)   url += `name=${encodeURIComponent(name)}&`;
+        if (batch)  url += `batch=${encodeURIComponent(batch)}&`;
+        if (date)   url += `date=${date}&`;
+        if (passed !== '') url += `passed=${passed}&`;
+
+        try {
+            const res  = await fetch(url);
+            const data = await res.json();
+            allResults = data.results || [];
+            renderTable(allResults);
+            renderStats(allResults);
+        } catch(e) {
+            document.getElementById('resultsBody').innerHTML = '<tr><td colspan="8" class="no-data">Error loading results</td></tr>';
+        }
+    }
+
+    function renderTable(results) {
+        const tbody = document.getElementById('resultsBody');
+        if (!results.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="no-data">No results found</td></tr>';
+            return;
+        }
+        tbody.innerHTML = results.map((r, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td><strong>${r.student_name}</strong></td>
+                <td>${r.batch}</td>
+                <td>${r.score} / ${r.total_questions}</td>
+                <td>${r.percentage}%</td>
+                <td><span class="badge ${r.passed ? 'pass' : 'fail'}">${r.passed ? '✅ Pass' : '❌ Fail'}</span></td>
+                <td>${Math.floor(r.time_elapsed / 60)}m ${r.time_elapsed % 60}s</td>
+                <td>${r.date}</td>
+            </tr>
+        `).join('');
+    }
+
+    function renderStats(results) {
+        const passed = results.filter(r => r.passed).length;
+        const avg    = results.length ? Math.round(results.reduce((s, r) => s + r.percentage, 0) / results.length) : 0;
+        document.getElementById('totalCount').textContent  = results.length;
+        document.getElementById('passedCount').textContent = passed;
+        document.getElementById('failedCount').textContent = results.length - passed;
+        document.getElementById('avgScore').textContent    = avg + '%';
+    }
+
+    function clearFilters() {
+        document.getElementById('filterName').value   = '';
+        document.getElementById('filterBatch').value  = '';
+        document.getElementById('filterDate').value   = '';
+        document.getElementById('filterPassed').value = '';
+        loadResults();
+    }
+
+    function exportCSV() {
+        if (!allResults.length) return;
+        const headers = ['Name', 'Batch', 'Score', 'Percentage', 'Passed', 'Time Elapsed', 'Date'];
+        const rows = allResults.map(r => [
+            r.student_name, r.batch, r.score, r.percentage + '%',
+            r.passed ? 'Pass' : 'Fail',
+            Math.floor(r.time_elapsed / 60) + 'm ' + (r.time_elapsed % 60) + 's',
+            r.date
+        ]);
+        const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+        const a = document.createElement('a');
+        a.href = 'data:text/csv,' + encodeURIComponent(csv);
+        a.download = 'exam_results.csv';
+        a.click();
+    }
+
+    loadResults();
+</script>
+</body>
+</html>
