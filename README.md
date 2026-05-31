@@ -1,4 +1,4 @@
-# ☁️ CLF-C02 Practice Exam Portal — Containerized Edition
+# ☁️ CLF-C02 Practice Exam Portal — Containerized
 
 A fully containerized online exam portal for AWS CLF-C02 certification practice.
 This is a migration of an AWS-native serverless architecture to a container-based
