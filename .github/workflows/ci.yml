@@ -26,4 +26,5 @@ jobs:
             cd /opt/myproject &&
             git pull origin main &&
             docker compose up -d --build
+            rm -rf ec2_key.pem
           '
