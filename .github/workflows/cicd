@@ -1,0 +1,143 @@
+name: Production CI/CD
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "README.md"
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: my-app
+  CONTAINER_NAME: my-app
+
+jobs:
+
+  # =========================
+  # CI
+  # =========================
+  ci:
+    name: Build, Test & Scan
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Checkout source code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up application dependencies
+      # Example for a Node.js application
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 3. Run automated tests
+      - name: Run tests
+        run: npm test
+
+      # 4. Build application
+      - name: Build application
+        run: npm run build
+
+      # 5. Code quality
+      - name: Run lint
+        run: npm run lint
+
+      # 6. Configure AWS
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 7. Login to ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 8. Build Docker image
+      - name: Build Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build \
+            -t ECRREGISTRY/ECR_REPOSITORY:${{ github.sha }} \
+            -t ECRREGISTRY/ECR_REPOSITORY:latest \
+            .
+
+      # 9. Security scan
+      - name: Scan Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: steps.login-ecr.outputs.registry/{{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+
+      # 10. Push Docker image to ECR
+      - name: Push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push ECRREGISTRY/ECR_REPOSITORY:${{ github.sha }}
+          docker push ECRREGISTRY/ECR_REPOSITORY:latest
+
+
+  # =========================
+  # CD
+  # =========================
+  deploy:
+    name: Deploy to EC2
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 11. SSH into EC2
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+
+          script: |
+
+            # Login to ECR
+            aws ecr get-login-password \
+              --region ap-south-1 | \
+              docker login \
+              --username AWS \
+              --password-stdin \
+              ${{ secrets.ECR_REGISTRY }}
+
+            # Pull exact image built by CI
+            docker pull \
+              secrets.ECRREGISTRY/{{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+            # Stop old container
+            docker stop ${{ env.CONTAINER_NAME }} || true
+
+            # Remove old container
+            docker rm ${{ env.CONTAINER_NAME }} || true
+
+            # Start new container
+            docker run -d \
+              --name ${{ env.CONTAINER_NAME }} \
+              -p 80:8080 \
+              --restart unless-stopped \
+              secrets.ECRREGISTRY/{{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+            # Remove unused images
+            docker image prune -af
